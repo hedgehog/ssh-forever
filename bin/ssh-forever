@@ -13,38 +13,24 @@ More info:
 options = {}
 OptionParser.new do |opts|
   opts.banner = banner
-
-  opts.on('-b', '--batch', "Run without interactive login", "Implies auto, intense, quiet and not login nor debug.") do |boolean|
-    options[:batch] = true
-    options[:auto] = true
-    options[:login] = false
-    options[:intense] = true
-    options[:quiet] = true
-    options[:debug] = false
-  end
-
   opts.on('-a', '--auto', "Run without prompting.") do |boolean|
-    options[:auto] = true
+    options[:auto] = boolean
   end
 
   opts.on('-d', '--debug', "Run SSH verbosely.") do |boolean|
-    options[:debug] = true unless options[:batch]
+    options[:debug] = boolean
   end
 
-  opts.on('-l', '--login', "Open SSH connection and stay logged in (default).") do |boolean|
-    options[:login] = true unless options[:batch]
+  opts.on('-l', '--login', "Open SSH connection and stay logged in.") do |boolean|
+    options[:login] = true
   end
 
-  opts.on('-p', '--port [PORT]', Integer, "SSH server port.") do |port|
+   opts.on('-p', '--port [PORT]', Integer, "SSH server port.") do |port|
     options[:port] = port
   end
 
   opts.on('-i', '--identity_file [FILE]', String, "SSH identity file path (no .pub).") do |identity_file|
     options[:identity_file] = identity_file
-  end
-
-  opts.on('-j', '--intense', "High SSH intensity.","If no data from the server after 1 second (default 15): Disconnect after 1 (default 3) unanswered 'server-alive' message.") do |boolean|
-    options[:intense] = true
   end
 
   opts.on('-n', '--name [NAME]', String, "SSH host name alias you wish to use.") do |name|
@@ -56,8 +42,8 @@ OptionParser.new do |opts|
     options[:debug] = false
   end
 
-  opts.on('-s', '--strict', "SSH with stricthostkeychecking=yes (deafult:no)") do |boolean|
-    options[:strict] = true
+  opts.on('-s', '--strict', "SSH with stricthostkeychecking=yes (default=no)") do |boolean|
+    options[:strict] = boolean
   end
 
 end.parse!
@@ -68,8 +54,5 @@ if login.nil?
   puts banner + "  ssh-forever --help\n"
   exit 1
 end
-if options[:batch]
-  SshForever::SecureShellForever.new(login, options).initialization_run
-else
-  SshForever::SecureShellForever.new(login, options).run_interactive
-end
+
+SshForever::SecureShellForever.new(login, options).run

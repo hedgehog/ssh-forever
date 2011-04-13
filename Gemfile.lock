@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    ssh-forever (0.4.0)
+    ssh-forever (0.3.0)
       open4 (>= 1.0.1)
 
 GEM
@@ -13,5 +13,4 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  open4
   ssh-forever!

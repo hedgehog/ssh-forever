@@ -2,23 +2,19 @@ require 'pathname'
 require "rubygems"
 require "bundler"
 Bundler.setup
-Bundler.require(:default)
-require 'open4'
+Bundler.require
 
 module SshForever
-  VERSION = '0.4.0'
+  VERSION = '0.3.0'
 
   class SecureShellForever
     def initialize(login, options = {})
       @login   = login
       @options = options
-      @hostname = @login.split("@")[1]
-      @username = @login.split("@")[0]
-      local_ssh_config_path
       local_key_path
     end
 
-    def initialization_run
+    def run
       unless File.exists?(public_key_path)
         STDERR.puts "You do not appear to have a public key. I expected to find one at #{public_key_path}"  unless @options[:quiet]
         confirm_keygen
@@ -31,14 +27,14 @@ module SshForever
 
       puts "Success. From now on you can just use plain old 'ssh'. Logging you in..."  unless @options[:quiet]
       status = run_shell_cmd(ssh_login(args))
-      # exitstatus 2 is when ssh-add can't find an agent on local machine.
-      # We ought to switch to use Net::SSH libraries....
-      exit 1 unless status.exitstatus.to_i == 0 || status.exitstatus.to_i == 2
-    end
-
-    def run_interactive
-      initialization_run
-      exec ssh_login_interactive(ssh_args)
+      exit 1 unless status.exitstatus.to_i == 0
+      if @options[:login]
+        if @options[:name]
+          `ssh #{@options[:name]}#{args}`   #TODO: fix this so that remote session is left open
+        else
+          `ssh #{@login}#{args}`
+        end
+      end
     end
 
   private
@@ -69,44 +65,18 @@ module SshForever
       host_config = <<-STUFF.gsub(/^ {6}/, '')
 
       Host #{@options[:name]}
-        HostName #{@hostname}
-        User #{@username}
-        Port #{@options[:port]}
-        IdentityFile #{public_key_path}
-        Protocol 2
+        HostName #{@login.split("@")[1]}
+        User #{@login.split("@")[0]}
         PreferredAuthentications publickey
-        PubkeyAuthentication yes
-        Batchmode yes
-        ChallengeResponseAuthentication no
-        CheckHostIP yes
-        StrictHostKeyChecking #{@options[:strict] ? 'yes' : 'no'}
-        HostKeyAlias #{@options[:name] ? @options[:name] : @hostname}
-        ConnectionAttempts 3
-        ControlMaster auto
-        ControlPath #{@local_ssh_config_path + '%h_%p_%r'}
-        ForwardAgent no
-        ForwardX11Trusted no
-        GatewayPorts yes
-        GSSAPIAuthentication no
-        GSSAPIDelegateCredentials no
-        HashKnownHosts yes
-        HostbasedAuthentication no
-        IdentitiesOnly yes
-        LogLevel #{@options[:debug] ? 'DEBUG3' : (@options[:quiet] ? 'QUIET' : 'INFO')}
-        NoHostAuthenticationForLocalhost yes
-        PasswordAuthentication no
-        PermitLocalCommand no
-        RekeyLimit 2G
-        ServerAliveCountMax #{@options[:intense] ? '1' : '3'}
-        ServerAliveInterval #{@options[:intense] ? '1' : '15'}
-        TCPKeepAlive yes
-        Tunnel no
+        IdentityFile #{public_key_path}
+        StrictHostKeyChecking #{@options[:strict] ? 'true' : 'false'}
+        HostKeyAlias #{@options[:name]}
       STUFF
     end
 
 
     def run_shell_cmd(cmd)
-      status = ::Open4::popen4('sh') do |pid, stdin, stdout, stderr|
+      status = Open4::popen4('sh') do |pid, stdin, stdout, stderr|
         puts "debug: #{cmd}"  if @options[:debug]
         stdin.puts cmd
         stdin.close
@@ -156,22 +126,13 @@ module SshForever
     def ssh_login(args)
       if @options[:name]
         append_ssh_config unless existing_ssh_config?
-        login_command = "ssh-add #{@options[:identity_file]}; SSH_AUTH_SOCK=0 ssh #{@options[:name]}#{args} 'echo true;';"
+        login_command = "ssh-add; SSH_AUTH_SOCK=0 ssh #{@options[:name]}#{args} 'ssh-add;';"
       else
-        login_command = "ssh-add #{@options[:identity_file]}; SSH_AUTH_SOCK=0 ssh #{@login}#{args} 'echo true;';"
+        login_command = "ssh-add; SSH_AUTH_SOCK=0 ssh #{@login}#{args} 'ssh-add;';"
       end
       login_command
     end
 
-    def ssh_login_interactive(args)
-      if @options[:name]
-        append_ssh_config unless existing_ssh_config?
-        login_command = "ssh #{@options[:name]}#{args}"
-      else
-        login_command = "ssh #{@login}#{args}"
-      end
-      login_command
-    end
 
     def flunk(message)
       STDERR.puts message
@@ -179,11 +140,7 @@ module SshForever
     end
 
     def local_key_path
-      if RUBY_VERSION =~ /^1\.8\.7/
-        @options[:identity_file] = Pathname(@options[:identity_file]).expand_path.to_s
-      else
-        @options[:identity_file] = Pathname(@options[:identity_file]).expand_path.realdirpath.to_s
-      end
+      @options[:identity_file] = Pathname(@options[:identity_file]).expand_path.realdirpath.to_s
     end
 
     def public_key_path
